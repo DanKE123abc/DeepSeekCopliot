@@ -1,4 +1,5 @@
 using System.Windows;
+using iNKORE.UI.WPF.Modern;
 
 namespace deepseek_copilot;
 
@@ -14,6 +15,7 @@ public partial class SettingsWindow : Window
     private readonly double _originalOpacity;
     private readonly bool _originalCopilotMap;
     private readonly bool _originalToggleShortcut;
+    private readonly bool _originalLongPressCapture;
 
     public SettingsWindow(AppSettings settings, Action<double> onWidthChanged,
         Action<ThemeMode> onThemeChanged, Action<double> onOpacityChanged)
@@ -25,11 +27,18 @@ public partial class SettingsWindow : Window
         _originalOpacity = settings.SidebarOpacity;
         _originalCopilotMap = settings.MapCopilotToRightCtrl;
         _originalToggleShortcut = settings.EnableToggleShortcut;
+        _originalLongPressCapture = settings.EnableLongPressCapture;
         _onWidthChanged = onWidthChanged;
         _onThemeChanged = onThemeChanged;
         _onOpacityChanged = onOpacityChanged;
         InitializeComponent();
         DataContext = settings;
+        ThemeManager.SetRequestedTheme(this, settings.GetThemeMode() switch
+        {
+            deepseek_copilot.ThemeMode.Dark => ElementTheme.Dark,
+            deepseek_copilot.ThemeMode.Light => ElementTheme.Light,
+            _ => ElementTheme.Default
+        });
         WidthSlider.Value = settings.SidebarWidth;
         DelaySlider.Value = settings.UnloadDelaySeconds;
         SpeedSlider.Value = settings.AnimationSpeed;
@@ -50,6 +59,8 @@ public partial class SettingsWindow : Window
         _settings.SetThemeMode((ThemeMode)ThemeCombo.SelectedIndex);
         _settings.AnimationSpeed = SpeedSlider.Value;
         _settings.SidebarOpacity = OpacitySlider.Value;
+        _settings.EnableToggleShortcut = ToggleShortcutCheck.IsChecked ?? false;
+        _settings.EnableLongPressCapture = LongPressCaptureCheck.IsChecked ?? false;
         _settings.Save();
         _onThemeChanged(_settings.GetThemeMode());
         _onOpacityChanged(_settings.SidebarOpacity);
@@ -64,6 +75,7 @@ public partial class SettingsWindow : Window
         _settings.SidebarOpacity = _originalOpacity;
         _settings.MapCopilotToRightCtrl = _originalCopilotMap;
         _settings.EnableToggleShortcut = _originalToggleShortcut;
+        _settings.EnableLongPressCapture = _originalLongPressCapture;
         _onWidthChanged(_settings.SidebarWidth);
         _onThemeChanged(_originalTheme);
         _onOpacityChanged(_originalOpacity);

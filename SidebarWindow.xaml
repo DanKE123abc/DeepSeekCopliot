@@ -33,14 +33,16 @@
                                        Foreground="#1A1A2E"
                                        TextTrimming="CharacterEllipsis"/>
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,8,0">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,0,12,0">
                             <Button x:Name="SettingsButton" Content="⚙" Width="32" Height="32"
+                                    Padding="0"
                                     Background="Transparent" BorderThickness="0"
                                     Foreground="#666" FontSize="16"
                                     Click="OnSettingsClick" Cursor="Hand"/>
                             <Button x:Name="CloseButton" Content="✕" Width="32" Height="32"
+                                    Padding="0"
                                     Background="Transparent" BorderThickness="0"
-                                    Foreground="#666" FontSize="16"
+                                    Foreground="#666" FontSize="16" Margin="8,0,0,0"
                                     Click="OnCloseClick" Cursor="Hand"/>
                         </StackPanel>
                     </Grid>

@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:ui="http://schemas.inkore.net/lib/ui/wpf/modern"
         mc:Ignorable="d"
         Title="屏幕截图"
         WindowStyle="None"
@@ -13,7 +14,8 @@
         ShowActivated="True"
         ResizeMode="NoResize"
         WindowStartupLocation="Manual"
-        Cursor="Cross">
+        Cursor="Cross"
+        ui:ThemeManager.RequestedTheme="Dark">
     <Grid>
         <Canvas x:Name="RootCanvas" Background="Transparent">
             <Image x:Name="ScreenImage" Stretch="Fill"/>
@@ -32,12 +34,15 @@
                         Visibility="Collapsed"
                         Panel.ZIndex="10">
                 <Button x:Name="CancelButton" Content="✕ 取消" Click="OnCancelClick"
-                        Width="72" Height="32" Margin="0"
+                        Width="80" Height="34" Margin="0"
+                        ui:ControlHelper.CornerRadius="4"
                         Background="#555555" Foreground="White"
                         BorderThickness="0" Cursor="Hand" FontSize="13"/>
                 <Button x:Name="ConfirmButton" Content="✓ 确定" Click="OnConfirmClick"
-                        Width="72" Height="32" Margin="4,0,0,0"
-                        Background="#FF4FC3F7" Foreground="White"
+                        Width="80" Height="34" Margin="6,0,0,0"
+                        ui:ControlHelper.CornerRadius="4"
+                        Background="{DynamicResource AccentFillColorDefaultBrush}"
+                        Foreground="White"
                         BorderThickness="0" Cursor="Hand" FontSize="13"/>
             </StackPanel>
         </Canvas>

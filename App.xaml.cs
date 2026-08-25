@@ -55,6 +55,7 @@ public partial class App : System.Windows.Application
     private async void OnCopilotLongPressed()
     {
         if (_captureActive) return;
+        if (_windowManager?.Settings.EnableLongPressCapture == false) return;
         _captureActive = true;
         try
         {
