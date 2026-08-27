@@ -94,7 +94,11 @@ public partial class App : System.Windows.Application
             Text = "DeepSeek Copilot\n点击切换侧边栏",
             Visible = true
         };
-        _trayIcon.Click += (_, _) => _windowManager?.Toggle();
+        _trayIcon.MouseClick += (_, e) =>
+        {
+            if (e.Button == Forms.MouseButtons.Left)
+                _windowManager?.Toggle();
+        };
 
         var menu = new Forms.ContextMenuStrip();
 
