@@ -1,6 +1,7 @@
 using KBEHtool;
 using Microsoft.Web.WebView2.Wpf;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -268,6 +269,63 @@ public partial class SidebarWindow : Window
             KeyAction.PressKey(new[] { KeyCode.LeftControl, KeyCode.V }, 60);
         }
         catch { }
+    }
+
+    public async Task<bool> AskAsync(string question)
+    {
+        if (_webView?.CoreWebView2 == null) return false;
+
+        var encoded = JsonSerializer.Serialize(question);
+
+        const string focusScript =
+            "(()=>{const e=document.querySelector('textarea,input');if(e){e.focus();}return e?true:false;})()";
+
+        var setScript =
+            "(()=>{" +
+            "const el=document.querySelector('textarea,input');" +
+            "if(!el)return false;" +
+            "const proto=el instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;" +
+            "Object.getOwnPropertyDescriptor(proto,'value').set.call(el," + encoded + ");" +
+            "el.dispatchEvent(new Event('input',{bubbles:true}));" +
+            "return true;})()";
+
+        var found = false;
+        for (var i = 0; i < 40; i++)
+        {
+            try
+            {
+                var ok = await _webView.CoreWebView2.ExecuteScriptAsync(setScript);
+                if (ok == "true") { found = true; break; }
+            }
+            catch { }
+            await Task.Delay(150);
+        }
+
+        if (!found) return false;
+
+        try { await _webView.CoreWebView2.ExecuteScriptAsync(focusScript); } catch { }
+        await Task.Delay(200);
+
+        const string enterScript =
+            "(()=>{" +
+            "const el=document.querySelector('textarea,input');" +
+            "if(!el)return false;" +
+            "const down=new KeyboardEvent('keydown',{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true,cancelable:true});" +
+            "const up=new KeyboardEvent('keyup',{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true,cancelable:true});" +
+            "el.dispatchEvent(down);el.dispatchEvent(up);return true;})()";
+
+        try { await _webView.CoreWebView2.ExecuteScriptAsync(enterScript); } catch { }
+        await Task.Delay(150);
+
+        const string clickScript =
+            "(()=>{" +
+            "const btns=[...document.querySelectorAll('button')];" +
+            "const b=btns.find(x=>{const t=(x.getAttribute('aria-label')||x.textContent||'');return /send|submit|发送/i.test(t);});" +
+            "if(b&&!b.disabled){b.click();return true;}return false;})()";
+
+        try { await _webView.CoreWebView2.ExecuteScriptAsync(clickScript); } catch { }
+
+        return true;
     }
 
     private void AnimateIn()

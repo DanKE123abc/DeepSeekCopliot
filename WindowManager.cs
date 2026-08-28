@@ -51,6 +51,15 @@ public sealed class WindowManager
         await _sidebar.PasteClipboardImageAsync();
     }
 
+    public async Task<bool> AskAsync(string question)
+    {
+        if (string.IsNullOrWhiteSpace(question)) return false;
+        ShowSidebar();
+        if (_sidebar == null) return false;
+        await _sidebar.WaitForSlideInAsync();
+        return await _sidebar.AskAsync(question);
+    }
+
     private void OnSettingsClicked()
     {
         var win = new SettingsWindow(Settings,

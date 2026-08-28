@@ -10,6 +10,7 @@ public partial class App : System.Windows.Application
     private static readonly System.Threading.Mutex _mutex = new(true, "DeepSeekCopilot-Singleton");
     private WindowManager? _windowManager;
     private KeyboardHookService? _keyboardService;
+    private ExternalInvokeService? _externalInvokeService;
     private Forms.NotifyIcon? _trayIcon;
     private Forms.ToolStripMenuItem? _mapMenuItem;
 
@@ -17,10 +18,22 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        var question = ParseQuestionArg(e.Args);
+
         if (!_mutex.WaitOne(0, false))
         {
-            System.Windows.MessageBox.Show("DeepSeek Copilot 已在运行中", "DeepSeek Copilot",
-                MessageBoxButton.OK, MessageBoxImage.Information);
+            if (question != null)
+            {
+                var forwarded = ExternalInvokeService.SendQuestionAsync(question).GetAwaiter().GetResult();
+                if (!forwarded)
+                    System.Windows.MessageBox.Show("DeepSeek Copilot 未在运行，无法转发问题", "DeepSeek Copilot",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            else
+            {
+                System.Windows.MessageBox.Show("DeepSeek Copilot 已在运行中", "DeepSeek Copilot",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+            }
             Shutdown();
             return;
         }
@@ -36,6 +49,9 @@ public partial class App : System.Windows.Application
         _keyboardService.CopilotKeyPressed += OnCopilotKeyPressed;
         _keyboardService.CopilotLongPressed += OnCopilotLongPressed;
 
+        _externalInvokeService = new ExternalInvokeService(_windowManager);
+        _externalInvokeService.Start();
+
         SetupTrayIcon();
 
         _keyboardService.MappingToggled += () =>
@@ -43,6 +59,21 @@ public partial class App : System.Windows.Application
             if (_mapMenuItem != null)
                 _mapMenuItem.Checked = _windowManager!.Settings.MapCopilotToRightCtrl;
         };
+
+        if (question != null && _windowManager != null)
+            Dispatcher.BeginInvoke(async () => await _windowManager.AskAsync(question));
+    }
+
+    private static string? ParseQuestionArg(string[] args)
+    {
+        for (var i = 0; i < args.Length; i++)
+        {
+            if (args[i] == "--ask" && i + 1 < args.Length)
+                return args[i + 1];
+        }
+        if (args.Length > 0 && args[0] != "--detect")
+            return args[0];
+        return null;
     }
 
     private void OnCopilotKeyPressed()
@@ -151,6 +182,7 @@ public partial class App : System.Windows.Application
     {
         _windowManager?.Cleanup();
         _keyboardService?.Dispose();
+        _externalInvokeService?.Dispose();
         _trayIcon?.Dispose();
         _mutex.ReleaseMutex();
         _mutex.Close();
