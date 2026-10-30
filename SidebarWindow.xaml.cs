@@ -22,6 +22,7 @@ public partial class SidebarWindow : Window
     private DispatcherTimer? _unloadTimer;
     private readonly DispatcherTimer _hideTimer;
     private WebView2? _webView;
+    private int _webViewGeneration;
     private bool _isOpeningSettings;
     private TaskCompletionSource<bool>? _slideInTcs;
 
@@ -80,6 +81,7 @@ public partial class SidebarWindow : Window
         DpiChanged += OnDpiChanged;
         PreviewKeyDown += OnPreviewKeyDown;
         Loaded += OnLoaded;
+        Closed += OnClosed;
 
         _hideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
         _hideTimer.Tick += OnHideTick;
@@ -180,20 +182,56 @@ public partial class SidebarWindow : Window
     {
         if (_webView != null) return;
 
-        var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(
-            null,
-            System.IO.Path.Combine(
-                System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
-                "DeepSeekCopilot", "WebView2"));
+        var generation = _webViewGeneration;
 
-        _webView = new WebView2();
-        WebViewHost.Children.Add(_webView);
+        Microsoft.Web.WebView2.Core.CoreWebView2Environment env;
+        try
+        {
+            env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(
+                null,
+                System.IO.Path.Combine(
+                    System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
+                    "DeepSeekCopilot", "WebView2"));
+        }
+        catch (Exception)
+        {
+            return;
+        }
 
-        await _webView.EnsureCoreWebView2Async(env);
-        _webView.CoreWebView2!.DocumentTitleChanged += OnTitleChanged;
+        // The sidebar may have been unloaded (or closed) while the environment was starting.
+        if (_webView != null || generation != _webViewGeneration) return;
+
+        var webView = new WebView2();
+        _webView = webView;
+        WebViewHost.Children.Add(webView);
+
+        try
+        {
+            // While this completes the control has no CoreWebView2 yet, so a concurrent
+            // DestroyWebView must not touch CoreWebView2 or this continuation.
+            await webView.EnsureCoreWebView2Async(env);
+        }
+        catch (Exception)
+        {
+            // Initialization failed or was aborted by disposal: clean up whatever is left.
+            if (ReferenceEquals(_webView, webView)) DestroyWebView();
+            return;
+        }
+
+        if (!ReferenceEquals(_webView, webView))
+            return; // destroyed while initializing; it was already disposed
+
+        var core = webView.CoreWebView2;
+        if (core == null)
+        {
+            DestroyWebView();
+            return;
+        }
+
+        core.DocumentTitleChanged += OnTitleChanged;
         SetWebViewColorScheme(_settings.IsDarkTheme);
-        _webView.CoreWebView2.Navigate(_settings.ChatUrl);
-        TitleText.Text = _webView.CoreWebView2.DocumentTitle;
+        core.Navigate(_settings.ChatUrl);
+        TitleText.Text = core.DocumentTitle;
     }
 
     private void OnTitleChanged(object? sender, object e)
@@ -206,17 +244,37 @@ public partial class SidebarWindow : Window
 
     private void DestroyWebView()
     {
+        _unloadTimer?.Stop();
         _unloadTimer = null;
 
-        if (_webView == null) return;
-
-        _webView.CoreWebView2!.DocumentTitleChanged -= OnTitleChanged;
-        WebViewHost.Children.Remove(_webView);
-        _webView.Dispose();
+        var webView = _webView;
         _webView = null;
 
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
+        // Invalidate any CreateWebViewAsync still waiting on the environment/browser.
+        _webViewGeneration++;
+
+        if (webView == null) return;
+
+        // CoreWebView2 is null while initialization is still in flight; never dereference it.
+        try { webView.CoreWebView2?.DocumentTitleChanged -= OnTitleChanged; } catch { }
+        try { WebViewHost.Children.Remove(webView); } catch { }
+        try { webView.Dispose(); } catch { }
+
+        // Releasing WebView2 tears down the browser process through the finalizer thread;
+        // do that GC pressure off the UI thread so unloading never blocks the interface.
+        Task.Run(() =>
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+        });
+    }
+
+    private void OnClosed(object? sender, EventArgs e)
+    {
+        _hideTimer.Stop();
+        _unloadTimer?.Stop();
+        DestroyWebView();
     }
 
     private void StartUnloadTimer()
@@ -285,9 +343,11 @@ public partial class SidebarWindow : Window
 
         for (var i = 0; i < 40; i++)
         {
+            var webView = _webView;
+            if (webView?.CoreWebView2 == null) return;
             try
             {
-                var result = await _webView.CoreWebView2.ExecuteScriptAsync(script);
+                var result = await webView.CoreWebView2.ExecuteScriptAsync(script);
                 if (result == "true")
                 {
                     await Task.Delay(250);
@@ -298,15 +358,19 @@ public partial class SidebarWindow : Window
             await Task.Delay(150);
         }
 
+        var visionHost = _webView;
+        if (visionHost?.CoreWebView2 == null) return;
+
         try
         {
-            await _webView.CoreWebView2.ExecuteScriptAsync(
+            await visionHost.CoreWebView2.ExecuteScriptAsync(
                 "(()=>{const v=document.querySelector('[data-model-type=\"vision\"][role=\"radio\"]');" +
                 "if(v&&v.getAttribute('aria-checked')!=='true'){v.click();}return true;})()");
         }
         catch { }
 
         await Task.Delay(200);
+        if (_webView?.CoreWebView2 == null) return;
 
         try
         {
@@ -336,9 +400,11 @@ public partial class SidebarWindow : Window
         var found = false;
         for (var i = 0; i < 40; i++)
         {
+            var webView = _webView;
+            if (webView?.CoreWebView2 == null) return false;
             try
             {
-                var ok = await _webView.CoreWebView2.ExecuteScriptAsync(setScript);
+                var ok = await webView.CoreWebView2.ExecuteScriptAsync(setScript);
                 if (ok == "true") { found = true; break; }
             }
             catch { }
@@ -347,8 +413,13 @@ public partial class SidebarWindow : Window
 
         if (!found) return false;
 
-        try { await _webView.CoreWebView2.ExecuteScriptAsync(focusScript); } catch { }
+        var host = _webView;
+        if (host?.CoreWebView2 == null) return false;
+
+        try { await host.CoreWebView2.ExecuteScriptAsync(focusScript); } catch { }
         await Task.Delay(200);
+
+        if (_webView?.CoreWebView2 == null) return false;
 
         const string enterScript =
             "(()=>{" +
@@ -358,8 +429,10 @@ public partial class SidebarWindow : Window
             "const up=new KeyboardEvent('keyup',{key:'Enter',code:'Enter',keyCode:13,which:13,bubbles:true,cancelable:true});" +
             "el.dispatchEvent(down);el.dispatchEvent(up);return true;})()";
 
-        try { await _webView.CoreWebView2.ExecuteScriptAsync(enterScript); } catch { }
+        try { await host.CoreWebView2.ExecuteScriptAsync(enterScript); } catch { }
         await Task.Delay(150);
+
+        if (_webView?.CoreWebView2 == null) return false;
 
         const string clickScript =
             "(()=>{" +
@@ -367,7 +440,7 @@ public partial class SidebarWindow : Window
             "const b=btns.find(x=>{const t=(x.getAttribute('aria-label')||x.textContent||'');return /send|submit|发送/i.test(t);});" +
             "if(b&&!b.disabled){b.click();return true;}return false;})()";
 
-        try { await _webView.CoreWebView2.ExecuteScriptAsync(clickScript); } catch { }
+        try { await host.CoreWebView2.ExecuteScriptAsync(clickScript); } catch { }
 
         return true;
     }
