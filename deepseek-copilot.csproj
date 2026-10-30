@@ -8,7 +8,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>app.ico</ApplicationIcon>
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>false</SelfContained>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -19,12 +21,10 @@
     <EmbeddedResource Include="copiloticon.svg" />
     <PackageReference Include="iNKORE.UI.WPF" Version="1.2.8" />
     <PackageReference Include="iNKORE.UI.WPF.Modern" Version="0.10.2.1" />
-    <PackageReference Include="Svg.Skia" Version="5.1.1" />
-    <ProjectReference Include="..\..\..\Documents\GitHub\KBEHtool\KBEHtool\KBEHtool.csproj" />
-    <!-- <PackageReference Include="KBEHtool" Version="0.4.0" /> -->
-    <PackageReference Include="Microsoft.Web.WebView2" Version="1.*" />
-    <!-- <ProjectReference Include="..\..\..\Documents\GitHub\DanKeJson\DanKeJson\DanKeJson.csproj" /> -->
+    <PackageReference Include="KBEHtool" Version="0.5.0" />
     <PackageReference Include="DanKeJson" Version="1.5.0" />
+    <PackageReference Include="Svg.Skia" Version="5.1.1" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.*" />
   </ItemGroup>
 
 </Project>

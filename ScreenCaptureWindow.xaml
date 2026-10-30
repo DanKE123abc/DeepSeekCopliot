@@ -7,8 +7,8 @@
         mc:Ignorable="d"
         Title="屏幕截图"
         WindowStyle="None"
-        AllowsTransparency="True"
-        Background="Transparent"
+        AllowsTransparency="False"
+        Background="#000000"
         Topmost="True"
         ShowInTaskbar="False"
         ShowActivated="True"
@@ -18,7 +18,6 @@
         ui:ThemeManager.RequestedTheme="Dark">
     <Grid>
         <Canvas x:Name="RootCanvas" Background="Transparent">
-            <Image x:Name="ScreenImage" Stretch="Fill"/>
             <Rectangle x:Name="DarkLeft" Fill="#8A000000"/>
             <Rectangle x:Name="DarkTop" Fill="#8A000000"/>
             <Rectangle x:Name="DarkRight" Fill="#8A000000"/>

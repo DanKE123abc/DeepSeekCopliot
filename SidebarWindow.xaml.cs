@@ -16,6 +16,9 @@ public partial class SidebarWindow : Window
     private const double BaseAnimationDurationMs = 250;
     private readonly AppSettings _settings;
     private double _sidebarWidth = 450;
+    private double _screenRightDip;
+    private double _screenTopDip;
+    private double _screenHeightDip;
     private DispatcherTimer? _unloadTimer;
     private readonly DispatcherTimer _hideTimer;
     private WebView2? _webView;
@@ -36,6 +39,9 @@ public partial class SidebarWindow : Window
 
     [DllImport("user32.dll")]
     private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hWnd);
 
     [DllImport("user32.dll")]
     private static extern short GetAsyncKeyState(int vKey);
@@ -68,12 +74,10 @@ public partial class SidebarWindow : Window
         Icon = IconHelper.RenderToBitmapSource(16);
         TitleIcon.Source = IconHelper.RenderToBitmapSource(18);
 
-        var workArea = SystemParameters.WorkArea;
-        Left = workArea.Right;
-        Top = workArea.Top;
-        Height = workArea.Height;
+        PositionOnMouseScreen();
 
         Deactivated += OnDeactivated;
+        DpiChanged += OnDpiChanged;
         PreviewKeyDown += OnPreviewKeyDown;
         Loaded += OnLoaded;
 
@@ -123,9 +127,48 @@ public partial class SidebarWindow : Window
     {
         _sidebarWidth = width;
         Width = width;
-        var workArea = SystemParameters.WorkArea;
         BeginAnimation(LeftProperty, null);
-        Left = workArea.Right - width;
+        PositionOnScreen();
+    }
+
+    private void PositionOnMouseScreen()
+    {
+        var screen = MonitorHelper.MouseScreen();
+
+        // WPF converts Window.Left/Top/Width/Height with the DPI of the monitor the window
+        // currently lives on, not the one it is being moved to. Convert with the current
+        // scale so the move lands on the right monitor; the resulting DpiChanged event
+        // re-runs this method once the window actually has that monitor's DPI.
+        var scale = CurrentDpiScale();
+
+        _screenRightDip = screen.WorkingArea.Right / scale;
+        _screenTopDip = screen.WorkingArea.Top / scale;
+        _screenHeightDip = screen.WorkingArea.Height / scale;
+        PositionOnScreen();
+    }
+
+    private double CurrentDpiScale()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd != IntPtr.Zero)
+        {
+            var dpi = GetDpiForWindow(hwnd);
+            if (dpi > 0) return dpi / 96d;
+        }
+        return 1d;
+    }
+
+    private void OnDpiChanged(object? sender, System.Windows.DpiChangedEventArgs e)
+    {
+        PositionOnMouseScreen();
+    }
+
+    private void PositionOnScreen()
+    {
+        BeginAnimation(LeftProperty, null);
+        Left = _screenRightDip - _sidebarWidth;
+        Top = _screenTopDip;
+        Height = _screenHeightDip;
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -203,6 +246,7 @@ public partial class SidebarWindow : Window
         _slideInTcs?.TrySetCanceled();
         _slideInTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         IsAnimating = true;
+        PositionOnMouseScreen();
 
         if (_webView == null)
         {
@@ -330,11 +374,10 @@ public partial class SidebarWindow : Window
 
     private void AnimateIn()
     {
-        var workArea = SystemParameters.WorkArea;
         var anim = new DoubleAnimation
         {
-            From = workArea.Right,
-            To = workArea.Right - _sidebarWidth,
+            From = _screenRightDip,
+            To = _screenRightDip - _sidebarWidth,
             Duration = TimeSpan.FromMilliseconds(BaseAnimationDurationMs / _settings.AnimationSpeed),
             EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
         };
@@ -364,7 +407,7 @@ public partial class SidebarWindow : Window
         var anim = new DoubleAnimation
         {
             From = Left,
-            To = SystemParameters.WorkArea.Right,
+            To = _screenRightDip,
             Duration = TimeSpan.FromMilliseconds(BaseAnimationDurationMs / _settings.AnimationSpeed),
             EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
         };
